@@ -62,11 +62,10 @@ ui <- shinyUI(fluidPage(
                     tabName = "resume",
                     # Bouton rafraichir
                     fluidRow(box(width = 12, title = "Resume des offres")),
-                    mainPanel(fluidRow(
+                    fluidRow(
                         #fluidRow(actionButton(inputId = "update", label = "Rafraichir", icon(name = "refresh", class = "fa-2x"))),
                         HTML(paste0("<br>")),
-                        DT::dataTableOutput("resumeOffres"))
-                    )
+                        DT::DTOutput("resumeOffres"))
                 ),
                 
                 #Carte
@@ -98,7 +97,7 @@ ui <- shinyUI(fluidPage(
 server <- shinyServer(function(input, output, session) {
     
     # Offres
-    output$resumeOffres <- DT::renderDataTable({data=mtcars}, filter = 'top', options = list(lengthMenu = c(10, 15), pageLength = 10))
+    output$resumeOffres <- DT::renderDT({data=mtcars}, filter = 'top', options = list(lengthMenu = c(5, 10), pageLength = 10, scrollX = TRUE))
     
     # # Connection a la base de donnees
     db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
