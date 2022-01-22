@@ -17,7 +17,7 @@ library(DBI)
 library(tidytext)
 library(tidyverse)
 library(tm)
-
+library(RSQLite)
 
 # Partie front
 ui <- shinyUI(fluidPage(
@@ -101,21 +101,18 @@ server <- shinyServer(function(input, output, session) {
     output$resumeOffres <- DT::renderDataTable({data=mtcars}, filter = 'top', options = list(lengthMenu = c(10, 15), pageLength = 10))
     
     # # Connection a la base de donnees
-    # db <- dbConnect(
-    #     drv = RMySQL::MySQL(),
-    #     dbname = "corpus_offres_data",
-    #     host = "localhost",
-    #     username = "root",
-    #     password = "")
-    # on.exit(dbDisconnect(db), add = TRUE)
-    # entreprise <- dbGetQuery(db, paste0("SELECT * FROM offre;"))
+    db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
+        on.exit(dbDisconnect(db), add = TRUE)
+
+    # Requete sur offre + creation objet S3 pour insertion dans le front
+    #   offre <- dbGetQuery(db, paste0("SELECT * FROM offre;"))
     # 
-    # # Stockage offre
+    # 
     # latitude <- offre$latitude
     # longitude <- offre$longitude
     # 
-    # ent <- list(latitude = latitude, longitude = longitude)
-    # class(ent) <- "offre"
+    # offre <- list(latitude = latitude, longitude = longitude)
+    # class(offre) <- "offre"
     
     latitude = c(45.5, 47.5)
     longitude = c(7.5, 7.8)
