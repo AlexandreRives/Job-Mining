@@ -39,19 +39,6 @@ regionApi <- data.frame(api_JSON$code, api_JSON$libelle)
 colnames(regionApi) <- c("Code", "Libelle")
 regionApi
 
-
-library(leaflet)
-library(shinydashboard)
-library(shinycssloaders)
-library(shiny)
-library(DT)
-library(leaflet.extras)
-library(DBI)
-library(tidytext)
-library(tidyverse)
-library(tm)
-
-
 #Script creation base de donnees
 db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
 dbExecute(db, "CREATE TABLE offre (id_offre TEXT PRIMARY KEY, intitule TEXT, description TEXT, date_parution TEXT, poste_predit TEXT, pourc_appartenance TEXT, latitude REAL, longitude REAL, id_partenaire INTEGER, FOREIGN KEY(id_partenaire) REFERENCES partenaire(id_partenaire))")
@@ -61,8 +48,10 @@ dbGetQuery(db, "Select * from partenaire")
 dbDisconnect(db)
 #unlink("corpus_offre_data.sqlite")
 
+# Script pour insertion des données.
 query <- paste("INSERT INTO offre VALUES(",paste(entreprises[1,], collapse =","), ")")
 query
+
 
 
 
