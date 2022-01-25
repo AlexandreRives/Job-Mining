@@ -8,11 +8,11 @@
 ##################################
 
 # vidage de la memoire
-rm(list=ls()) 
+rm(list=ls())
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 # Fonction de verification pour installation des packages
-packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda")
+packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda", "quanteda.textstats")
 
 package.check <- lapply(
     packages,
@@ -40,7 +40,7 @@ ui <- shinyUI(fluidPage(
         
         dashboardSidebar(width = 300,
             sidebarMenu(
-                menuItem("Resume des offres", tabName = "resume", icon = icon("table")),
+                menuItem("Résume des offres", tabName = "resume", icon = icon("table")),
                 menuItem("Carte des offres", tabName = "carte", icon = icon("map-marked-alt")),
                 menuItem("Analyse d'un document", tabName = "offre", icon = icon("file")),
                 menuItem("Analyse d'un corpus", tabName = "corpus", icon = icon("archive")),
@@ -65,17 +65,17 @@ ui <- shinyUI(fluidPage(
                 #Tableau récapitulatif des offres
                 tabItem(
                     tabName = "resume",
-                    # Bouton rafraichir
-                    fluidRow(box(width = 12, title = "Résume des offres", actionButton(inputId = "update", label = "Charger les donnees", icon(name = "refresh", class = "fa-2x"), width = "20%"))),
+                    # Bouton rafraîchir
+                    fluidRow(box(width = 12, title = "Résume des offres", actionButton(inputId = "update", label = "Charger les données", icon(name = "sync", class = "fas fa-sync"), width = "20%"))),
                     fluidRow(
                         DT::DTOutput("resumeOffres")
                     )
                 ),
-                
+
                 #Carte
                 tabItem(tabName = "carte",
 
-                    leafletOutput("carte") %>% withSpinner(color="black")
+                    leafletOutput("carte")
                     
                 ),
                 
@@ -99,6 +99,28 @@ ui <- shinyUI(fluidPage(
 
 # Partie serveur
 server <- shinyServer(function(input, output, session) {
+    
+    # Fonction nettoyage de données :
+    nettoyage <- function(document){
+        #passe en miniature 
+        document <- tolower(document)
+        #retire les sauts de lignes
+        document <- gsub("[\n\r/+]","",document)
+        #retire la ponctuation
+        #document <- gsub("[\\(,);:.?!'-*]"," ",document)
+        #retire les chiffres
+        document <- gsub("[0-9]","",document)
+        #retire les accents
+        document <- gsub("[éèëê]","e",document)
+        document <- gsub("[àäâ]","a",document)
+        document <- gsub("[îï]","i",document)
+        document <- gsub("[üû]","u",document)
+        document <- gsub("[öô]","o",document)
+    }
+    
+    ######################################
+    #             Partie API             #
+    ######################################
     
     # # Stockage des identifiants
     client_id = "PAR_jobmining_ed402730d0bb4b6d057f41779bb1bab6b08a49e3317ad626c547dc3b055d94cc"
@@ -143,28 +165,85 @@ server <- shinyServer(function(input, output, session) {
     #     }
     # }
     
+    ######################################
+    #        Partie résumé des offres    #
+    ######################################
+    
     # Affichage des offres :
     db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
-    query_offres <- dbGetQuery(db, paste0("SELECT id_offre, intitule, date_parution, partenaire, logo, type_contrat FROM offre;"))
+    query_offres <- dbGetQuery(db, paste0("SELECT id_offre, intitule, date_parution, partenaire, logo, experience, type_contrat FROM offre;"))
     dbDisconnect(db)
     output$resumeOffres <- DT::renderDT({data=query_offres}, filter = 'top', options = list(lengthMenu = c(5, 10, 20), pageLength = 20, scrollX = TRUE))
     
     # Connexion à la base de données
     db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
-    query_coordonnees <- dbGetQuery(db, paste0("SELECT latitude, longitude FROM offre;"))
+    query_carte <- dbGetQuery(db, paste0("SELECT intitule, type_contrat, experience, latitude, longitude, description FROM offre;"))
     dbDisconnect(db)
-
+    
+    # Filtres sur les coordonnées erronées
+    query_carte_filtered <- query_carte[query_carte$longitude < 10,]
+    
+    # Select des descriptions pour affichage sur la popup de la carte.
+    query_carte_filtered$description <- nettoyage(query_carte_filtered$description)
+    corpus <- corpus(query_carte_filtered,text_field='description')
+    
+    # Stop words
+    mots_vides <- quanteda::stopwords(language = 'fr')
+    mots_vides <- c(mots_vides,c("data","donnee","donnees","tant","que","hf","fh","en","a","e",""))
+    
+    # Création de la matrice documents termes
+    corpus.token <- corpus %>%
+        tokens(remove_numbers = TRUE,remove_symbols = TRUE,remove_url = TRUE)%>%
+        tokens_remove(mots_vides)%>%
+        dfm()
+    
+    # Liste des maîtrises à matcher avec la matrice documents-termes.
+    maitrise <- c("python","r","sql","nosql","knime","tableau","powerbi","sas","azure","aws","statistique","mongodb","hadoop","spark","matlab","scala","java","git","github","gitlab","qliksense","cloud","excel","gcp","hive","qlikview","qlik","talend")
+    
+    # Match avec 
+    map.dmt <- dfm_match(corpus.token,features = maitrise)
+    dfMap <- convert(map.dmt,to="data.frame")
+    
+    dfMap$doc_id <- NULL
+    
+    liste_maitrise <- apply(dfMap, 1, function(x){
+        index <- which(x>0)
+        return(names(dfMap)[index])
+    })
+    
+    df_maitrise <- c()
+    for(i in liste_maitrise){
+        if(length(i) == 0){
+            i <- "Non renseigné"
+        }
+        df_maitrise <- rbind(df_maitrise, toString(i))
+    }
+    
+    query_carte_filtered <- cbind(query_carte_filtered, df_maitrise)
+    
+    ######################################
+    #           Partie carte             #
+    ######################################
+    
+    # Préparation des données à afficher sur la carte
+    map_data <- paste("Intitulé : ", query_carte_filtered$intitule, "<br/>", "Type contrat : ", query_carte_filtered$type_contrat, "<br/>", "Expérience requise : ", query_carte_filtered$experience, "<br/>", "Compétences requises : ", query_carte_filtered$df_maitrise)
+    
     # Carte
-    output$carte <- renderLeaflet({leaflet() %>%
+    output$carte <- renderLeaflet({leaflet(map_data) %>%
     addProviderTiles(providers$OpenStreetMap.Mapnik, group = "Open Street Map", options = providerTileOptions(noWrap = TRUE)) %>%
-        addFullscreenControl() %>%
-        addMarkers(lat = query_coordonnees$latitude, lng = query_coordonnees$longitude, label = c(query_coordonnees$latitude)) %>%
+        addMarkers(lat = query_carte_filtered$latitude, lng = query_carte_filtered$longitude, popup = map_data, clusterOptions = markerClusterOptions(), labelOptions = labelOptions(textsize = "15px")) %>%
         addLayersControl(
             baseGroups = c("Open Street Map"),
             position = c("topleft"),
             options = layersControlOptions(collapsed = TRUE)
         )
     })
+    
+    ######################################
+    #        Partie analyse du corpus    #
+    ######################################
+    
+    
 })
 
 shinyApp(ui = ui, server = server)
