@@ -11,7 +11,7 @@
 rm(list=ls()) 
 
 # Fonction de verification pour installation des packages
-packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite")
+packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda")
 
 package.check <- lapply(
     packages,
@@ -61,15 +61,14 @@ ui <- shinyUI(fluidPage(
             
             tabItems(
                 
-                #Tableau recapitulatif des offres
+                #Tableau récapitulatif des offres
                 tabItem(
                     tabName = "resume",
                     # Bouton rafraichir
-                    fluidRow(box(width = 12, title = "Resume des offres")),
+                    fluidRow(box(width = 12, title = "Résume des offres", actionButton(inputId = "update", label = "Charger les donnees", icon(name = "refresh", class = "fa-2x"), width = "20%"))),
                     fluidRow(
-                        #fluidRow(actionButton(inputId = "update", label = "Rafraichir", icon(name = "refresh", class = "fa-2x"))),
-                        HTML(paste0("<br>")),
-                        DT::DTOutput("resumeOffres"))
+                        DT::DTOutput("resumeOffres")
+                    )
                 ),
                 
                 #Carte
@@ -100,62 +99,65 @@ ui <- shinyUI(fluidPage(
 # Partie serveur
 server <- shinyServer(function(input, output, session) {
     
-    # Connexion a l'api avec controle et insertion des nouvelles donnees
-    
-    # Stockage des identifiants
+    # # Stockage des identifiants
     client_id = "PAR_jobmining_ed402730d0bb4b6d057f41779bb1bab6b08a49e3317ad626c547dc3b055d94cc"
     client_secret = "aad6d0b817f01e18114af8dc89c0188a4922043e119b59a467bc2b20a2f88967"
-    
+
     # Creation de la liste des options pour la requete POST du token
     request_body <- list(grant_type = "client_credentials",
                          client_id = client_id,
                          client_secret = client_secret,
                          scope = paste("api_offresdemploiv2", "o2dsoffre", paste0("application_",client_id), sep = " "))
-    
+
     # POST pour recuperer le token
     result_auth <- POST("https://entreprise.pole-emploi.fr/connexion/oauth2/access_token",
                         query = list(realm = "/partenaire"),
                         body = request_body,
                         encode = "form")
-    
+
     # Stockage du token
     api_char_token <- base::rawToChar(result_auth$content)
     api_JSON_token <- jsonlite::fromJSON(api_char_token, flatten = TRUE)
     token = paste("Bearer ",api_JSON_token$access_token)
-    
+
     # GET sur les offres
     request <- GET("https://api.emploi-store.fr/partenaire/offresdemploi/v2/offres/search?motsCles=Data", add_headers(Authorization = token))
     request_utf <- httr::content(request, as = 'text', encoding="UTF-8")
     api_JSON <- jsonlite::fromJSON(request_utf, flatten = TRUE)
-    # data.frame(api_JSON$resultats$id)
+    # dfOffres <- data.frame(api_JSON$resultats$id, api_JSON$resultats$intitule, api_JSON$resultats$dateCreation, api_JSON$resultats$typeContrat, api_JSON$resultats$experienceLibelle, api_JSON$resultats$qualificationLibelle)
+    # dfPartenaires <- data.frame()
+    # #Récupérer tous les partenaires
+    # #Récupérer tous les logos
+    # #Faire dfOffres final
+    # print(dfOffres)
     
     # Faire controle ici avant insertion Select id offre from offre check si id de l'API different ou egal a un id present dans la table si NON INSERT
+    # db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
+    # on.exit(dbDisconnect(db), add = TRUE)
+    # query_offres <- dbGetQuery(db, paste0("SELECT id_offre FROM offre"))
+    # for(i in query_offres$id_offre){
+    #     if(i != dfOffres$id){
+    #         query <- paste("INSERT INTO offre VALUES(",paste(dfOffres[1,], collapse =","), ")")
+    #         dbExecute(db, query)
+    #     }
+    # }
     
-    # Offres
-    output$resumeOffres <- DT::renderDT({data=mtcars}, filter = 'top', options = list(lengthMenu = c(5, 10), pageLength = 10, scrollX = TRUE))
-    
-    # # Connection a la base de donnees
+    # Affichage des offres :
     db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
-        on.exit(dbDisconnect(db), add = TRUE)
-
-    # Requete sur offre + creation objet S3 pour insertion dans le front
-    #   offre <- dbGetQuery(db, paste0("SELECT * FROM offre;"))
-    # 
-    # 
-    # latitude <- offre$latitude
-    # longitude <- offre$longitude
-    # 
-    # offre <- list(latitude = latitude, longitude = longitude)
-    # class(offre) <- "offre"
+    query_offres <- dbGetQuery(db, paste0("SELECT id_offre, intitule, date_parution, partenaire, logo, type_contrat FROM offre;"))
+    dbDisconnect(db)
+    output$resumeOffres <- DT::renderDT({data=query_offres}, filter = 'top', options = list(lengthMenu = c(5, 10, 20), pageLength = 20, scrollX = TRUE))
     
-    latitude = c(45.5, 47.5)
-    longitude = c(7.5, 7.8)
+    # Connexion à la base de données
+    db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
+    query_coordonnees <- dbGetQuery(db, paste0("SELECT latitude, longitude FROM offre;"))
+    dbDisconnect(db)
 
     # Carte
     output$carte <- renderLeaflet({leaflet() %>%
     addProviderTiles(providers$OpenStreetMap.Mapnik, group = "Open Street Map", options = providerTileOptions(noWrap = TRUE)) %>%
         addFullscreenControl() %>%
-        addMarkers(lat = latitude, lng = longitude) %>%
+        addMarkers(lat = query_coordonnees$latitude, lng = query_coordonnees$longitude, label = c(query_coordonnees$latitude)) %>%
         addLayersControl(
             baseGroups = c("Open Street Map"),
             position = c("topleft"),
