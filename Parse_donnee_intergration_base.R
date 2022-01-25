@@ -4,11 +4,17 @@ setwd("C:\\Users\\Inès\\Cours M2 SISE\\Texte Ming - Ricco R\\Projet -- pole empl
 # chargement des librairies 
 library(lubridate)
 library(jsonlite)
-library(tidyverse)
-library(tidytext)
-library(RMySQL)
+#library(tidyverse)
+#library(tidytext)
+library(RSQLite)
+library(DBI)
 library(httr)
-library(tm)
+#library(tm)
+
+# ==========================================#
+#     Connection à l'api et récupération
+#               des offres 
+# ==========================================#
 
 # mise en place accès token 
 client_id = "PAR_projettextmining_8c23292b85bd39841eee81f31aacfdbb703b8fb078a132a7ccdbff5a5933f949"
@@ -37,15 +43,16 @@ request_utf <- httr::content(request, as = 'text', encoding="UTF-8")
 api_JSON <- jsonlite::fromJSON(request_utf, flatten = TRUE)
 
 #création dataframe analyse des offres
-id <- api_JSON$resultats$id
+id_offre <- api_JSON$resultats$id
 description <- api_JSON$resultats$description
-intituler <- api_JSON$resultats$intitule
+intitule <- api_JSON$resultats$intitule
 date_parution <- api_JSON$resultats$dateCreation
 type_contrat <- api_JSON$resultats$typeContrat
-entreprise <- api_JSON$resultats$origineOffre.partenaires
+partenaire_API <- api_JSON$resultats$origineOffre.partenaires
 longitude <- api_JSON$resultats$lieuTravail.longitude
 latitude <- api_JSON$resultats$lieuTravail.latitude
-
+statut <- api_JSON$resultats$qualificationLibelle
+experience <- api_JSON$resultats$experienceLibelle
 
 #=============================================================================#
 #         Transformation des offres récupérés par l'api 
@@ -55,129 +62,79 @@ latitude <- api_JSON$resultats$lieuTravail.latitude
 
 #recodage date
 date <- strsplit(date_parution,"T",fixed = T)
-date2 <- unlist(lapply(date, function(x){return(x[1])}))
+date_parution <- unlist(lapply(date, function(x){return(x[1])}))
 
 #creation des listes
-partenaire <- list()
 offre_partenaire <- list()
-link <- list()
+logo <- list()
 
 #extraction des informations
-for(i in 1:length(entreprise)){
-  nom <- entreprise[[i]]$nom
-  logo <- entreprise[[i]]$logo
+for(i in 1:length(partenaire_API)){
+  nom <- partenaire_API[[i]]$nom
+  logos <- partenaire_API[[i]]$logo
   if(length(nom) == 0){
-    nom <- paste("'","non connu","'",sep="")
-    logo <- ''
+    nom <- "non connu" #paste("'","non connu","'",sep="")
+    logos <- ''
   }
-  if(nom == "'non connu'"){
-    offre_partenaire <- c(offre_partenaire,1)
-  }
-  if(nom == "JOBINTREE"){
-    offre_partenaire <- c(offre_partenaire,2)
-  }
-  if(nom == "WE_RECRUIT"){
-    offre_partenaire <- c(offre_partenaire,3)
-  }
-  if(nom == "JOBIJOBA"){
-    offre_partenaire <- c(offre_partenaire,4)
-  }
-  if(nom == "ENEDIS"){
-    offre_partenaire <- c(offre_partenaire,5)
-  }
-  if(nom == "CAREERBUILDER"){
-    offre_partenaire <- c(offre_partenaire,6)
-  }
-  if(nom == "INZEJOB"){
-    offre_partenaire <- c(offre_partenaire,7)
-  }
-  if(nom == "PMEJOB"){
-    offre_partenaire <- c(offre_partenaire,8)
-  }
-  if(nom == "PEP"){
-    offre_partenaire <- c(offre_partenaire,9)
-  }
-  if(nom == "AEROCONTACT"){
-    offre_partenaire <- c(offre_partenaire,10)
-  }
-  if(nom == "GRD_SEANERGIC"){
-    offre_partenaire <- c(offre_partenaire,11)
-  }
-  if(nom == "STUDYRAMA"){
-    offre_partenaire <- c(offre_partenaire,12)
-  }
-  if(nom == "DIRECTEMPLOI"){
-    offre_partenaire <- c(offre_partenaire,13)
-  }
-  if(nom == "APEC"){
-    offre_partenaire <- c(offre_partenaire,14)
-  }
-  if(nom == "INDEED"){
-    offre_partenaire <- c(offre_partenaire,15)
-  }
-  if(!(nom %in% partenaire)){
-    partenaire <- c(partenaire,nom)
-  }
-  if(!(logo %in% link)){
-    link <- c(link,logo)
-  }
+  offre_partenaire <- c(offre_partenaire,nom)
+  logo <- c(logo,logos)
 }
 
 #mise au format chaine de caractère
-offre_partenaire <- unlist(offre_partenaire)
-partenaire <- unlist(partenaire) 
-link <- unlist(link)
-
-#nettoyage de la variable description (pré-traitement)
-nettoyage <- function(doc){
-  doc <- tolower(doc)
-  doc <- gsub("\n","",doc)
-  doc <- gsub("'"," ",doc)
-  doc <- gsub("[0-9]","",doc)
-  
-  return(doc)
-}
-
-description_net <- nettoyage(description)
-intituler_net <- nettoyage(intituler)
+partenaire <- unlist(offre_partenaire)
+logo <- unlist(logo)
 
 #========================================================#
 #       Test mettre des cote simple dans description 
 #       après transformation Data.frame données qualitative
 #========================================================#
 
-# itégration de simple cote pour requete SQL sur les données qualitatives
-quali_df <- data.frame(cbind(id,intituler_net,description_net,date2,type_contrat))
-quali_df <- apply(quali_df,2,FUN =  function(x){return(paste("'",x,"'",sep = ""))})
-class(quali_df)
+#itégration de simple cote pour requete SQL sur les données qualitatives
+#quali_df <- data.frame(cbind(id_offre,intitule,description,date_parution,type_contrat))
+#quali_df <- apply(quali_df,2,FUN =  function(x){return(paste("'",x,"'",sep = ""))})
+#class(quali_df)
 
 # création des bases de données
-offres <- data.frame(cbind(quali_df,latitude,longitude,offre_partenaire))
-partenaire <- data.frame(cbind(1:length(partenaire),partenaire,link))
+offre <- data.frame(cbind(id_offre,intitule,description,date_parution,latitude,longitude,type_contrat,statut,experience,partenaire,logo))
+partenaire <- data.frame(cbind(partenaire,logo))
 
-# types 
-class(offres)
-class(partenaire)
-
-#supprime les offres longitude/ latitude => NA
-offres <- offres[!is.na(offres$latitude),]
 
 #================================================#
 #           Insersiton des data.frames 
 #           dans la base de données
 #================================================#
 
+#connection 
+db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
+
+#insertion 
+dbWriteTable(db,name = "offre",value = offre,append=TRUE)
+
+#close
+dbDisconnect(db)
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
 
 #connection a la base de données 
+# query <- paste("INSERT INTO offre (id_offre,intitule,description,date_parution,latitude,longitude,type_contrat,statut,experience) VALUES( SELECT ",",") ")")
+# 
+# query <- paste("INSERT INTO offre (id_offre,intitule,description,date_parution,latitude,longitude,type_contrat,statut,experience) VALUES(",apply(offres, 1, paste0, collapse = ",")
+#       ,",(SELECT id_partenaire from partentaire where partenaire.partenaire=offre.id_partenaire))") 
+# 
+# INSERT INTO  offre 
+# SELECT o.id_offre,o.intitule,o.description,o.date_parution,o.latitude,o.longitude,o.type_contrat,o.statut,o.experience,p.id_partenaire
+# FROM offre as o
+# LEFT JOIN partenaire as p 
+# ON o.id_partenaire = p.partenaire;
 
-conn <- dbConnect(
-      drv = RMySQL::MySQL(),
-       dbname = "corpus_offres_data",
-       host = "localhost",
-       username = "root",
-       password = "")
-
-query <- paste("INSERT INTO offre VALUES(",apply(offres, 1, paste0, collapse = ","), ")")
-#query
-res <- dbSendQuery(conn = conn,query)
-dbGetStatement(res)
