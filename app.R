@@ -9,6 +9,7 @@
 
 # vidage de la memoire
 rm(list=ls()) 
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 # Fonction de verification pour installation des packages
 packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda")
