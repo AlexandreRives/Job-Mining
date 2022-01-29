@@ -144,9 +144,13 @@ server <- shinyServer(function(input, output, session) {
     
     # Affichage des offres :
     db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
-    query_offres <- dbGetQuery(db, paste0("SELECT id_offre, intitule, date_parution, partenaire, logo, type_contrat FROM offre;"))
+    query_offres <- dbGetQuery(db, paste0("SELECT id_offre, intitule, date_parution, logo, type_contrat,experience FROM offre;"))
+    query_offres$logo<-paste0('<img src="',query_offres$logo, '"/>')
+    #renommer la table des offres 
+    query_offres <-rename(query_offres, c("N° Offre"="id_offre", "Intitule de l'offre"="intitule", "Date de parution"="date_parution",
+                                          "Partenaire"="logo","Type de contrat"="type_contrat","Expérience"="experience"))
     dbDisconnect(db)
-    output$resumeOffres <- DT::renderDT({data=query_offres}, filter = 'top', options = list(lengthMenu = c(5, 10, 20), pageLength = 20, scrollX = TRUE))
+    output$resumeOffres <- DT::renderDT({DT::datatable(query_offres,escape = FALSE)}, filter = 'top', options = list(lengthMenu = c(5, 10, 20), pageLength = 20, scrollX = TRUE))
     
     # Connexion à la base de données
     db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
