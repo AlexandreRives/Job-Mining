@@ -7,12 +7,13 @@
 #                                #
 ##################################
 
-# vidage de la memoire
+# # vidage de la memoire
 rm(list=ls())
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
-# Fonction de verification pour installation des packages
-packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny","shinyWidgets", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda", "quanteda.textstats")
+ # Fonction de verification pour installation des packages
+packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda", "quanteda.textstats", "dplyr")
+
 
 package.check <- lapply(
     packages,
@@ -26,6 +27,7 @@ package.check <- lapply(
 
 
 
+
 word_data <- c("python","r","java","javascript","scala","cloud","spark","analyst","analyse",
                "scientist","science","azure","talend","qlik","ia","engineering","engineer",
                "learning","deep","analyser","aide","algorithme","decision","predictive","predictif",
@@ -36,6 +38,7 @@ word_data <- c("python","r","java","javascript","scala","cloud","spark","analyst
                "informatica","kpi","kpis","scikit","learn","pandas","datalab","datalakes","batch",
                "pipelines","hdfs","hive","hbase","cloudera","mapr","awz","gcp","docker","cassandra",
                "elasticsearch","datacenter","it",'agile',"srum","pilotage","si")
+
 
 # Partie front
 ui <- shinyUI(fluidPage(
@@ -79,7 +82,9 @@ ui <- shinyUI(fluidPage(
                 tabItem(
                     tabName = "resume",
                     # Bouton rafraÃ®chir
+
                     fluidRow(box(width = 12, title = "RÃ©sume des offres", actionButton(inputId = "update", label = "Charger les donnÃ©es", icon(name = "sync", class = "fas fa-sync"), width = "20%"))),
+
                     fluidRow(
                         DT::DTOutput("resumeOffres")
                     )
@@ -142,37 +147,38 @@ server <- shinyServer(function(input, output, session) {
     ######################################
     
     # # Stockage des identifiants
-    client_id = "PAR_jobmining_ed402730d0bb4b6d057f41779bb1bab6b08a49e3317ad626c547dc3b055d94cc"
-    client_secret = "aad6d0b817f01e18114af8dc89c0188a4922043e119b59a467bc2b20a2f88967"
-
-    # Creation de la liste des options pour la requete POST du token
-    request_body <- list(grant_type = "client_credentials",
-                         client_id = client_id,
-                         client_secret = client_secret,
-                         scope = paste("api_offresdemploiv2", "o2dsoffre", paste0("application_",client_id), sep = " "))
-
-    # POST pour recuperer le token
-    result_auth <- POST("https://entreprise.pole-emploi.fr/connexion/oauth2/access_token",
-                        query = list(realm = "/partenaire"),
-                        body = request_body,
-                        encode = "form")
-
-    # Stockage du token
-    api_char_token <- base::rawToChar(result_auth$content)
-    api_JSON_token <- jsonlite::fromJSON(api_char_token, flatten = TRUE)
-    token = paste("Bearer ",api_JSON_token$access_token)
-
-    # GET sur les offres
-    request <- GET("https://api.emploi-store.fr/partenaire/offresdemploi/v2/offres/search?motsCles=Data", add_headers(Authorization = token))
-    request_utf <- httr::content(request, as = 'text', encoding="UTF-8")
-    api_JSON <- jsonlite::fromJSON(request_utf, flatten = TRUE)
+    # client_id = "PAR_jobmining_ed402730d0bb4b6d057f41779bb1bab6b08a49e3317ad626c547dc3b055d94cc"
+    # client_secret = "aad6d0b817f01e18114af8dc89c0188a4922043e119b59a467bc2b20a2f88967"
+    # 
+    # # Creation de la liste des options pour la requete POST du token
+    # request_body <- list(grant_type = "client_credentials",
+    #                      client_id = client_id,
+    #                      client_secret = client_secret,
+    #                      scope = paste("api_offresdemploiv2", "o2dsoffre", paste0("application_",client_id), sep = " "))
+    # 
+    # # POST pour recuperer le token
+    # result_auth <- POST("https://entreprise.pole-emploi.fr/connexion/oauth2/access_token",
+    #                     query = list(realm = "/partenaire"),
+    #                     body = request_body,
+    #                     encode = "form")
+    # 
+    # # Stockage du token
+    # api_char_token <- base::rawToChar(result_auth$content)
+    # api_JSON_token <- jsonlite::fromJSON(api_char_token, flatten = TRUE)
+    # token = paste("Bearer ",api_JSON_token$access_token)
+    # 
+    # # GET sur les offres
+    # request <- GET("https://api.emploi-store.fr/partenaire/offresdemploi/v2/offres/search?motsCles=Data", add_headers(Authorization = token))
+    # request_utf <- httr::content(request, as = 'text', encoding="UTF-8")
+    # api_JSON <- jsonlite::fromJSON(request_utf, flatten = TRUE)
     # dfOffres <- data.frame(api_JSON$resultats$id, api_JSON$resultats$intitule, api_JSON$resultats$dateCreation, api_JSON$resultats$typeContrat, api_JSON$resultats$experienceLibelle, api_JSON$resultats$qualificationLibelle)
     # dfPartenaires <- data.frame()
+
     # #RÃ©cupÃ©rer tous les partenaires
     # #RÃ©cupÃ©rer tous les logos
     # #Faire dfOffres final
     # print(dfOffres)
-    
+
     # Faire controle ici avant insertion Select id offre from offre check si id de l'API different ou egal a un id present dans la table si NON INSERT
     # db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
     # on.exit(dbDisconnect(db), add = TRUE)
@@ -191,12 +197,14 @@ server <- shinyServer(function(input, output, session) {
     # Affichage des offres :
     db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
     query_offres <- dbGetQuery(db, paste0("SELECT id_offre, intitule, date_parution, partenaire, logo, experience, type_contrat FROM offre;"))
-    dbDisconnect(db)
+
     output$resumeOffres <- DT::renderDT({data=query_offres}, filter = 'top', options = list(lengthMenu = c(5, 10, 20), pageLength = 20, scrollX = TRUE))
     
+
     # Connexion Ã  la base de donnÃ©es
     db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
     query_carte <- dbGetQuery(db, paste0("SELECT intitule, type_contrat, experience, latitude, longitude, description FROM offre;"))
+
     dbDisconnect(db)
     
     # Filtres sur les coordonnÃ©es erronÃ©es
@@ -207,29 +215,30 @@ server <- shinyServer(function(input, output, session) {
     corpus <- corpus(query_carte_filtered,text_field='description')
     
     # Stop words
-    mots_vides <- quanteda::stopwords(language = 'fr')
+    mots_vides <- quanteda::stopwords("french")
     mots_vides <- c(mots_vides,c("data","donnee","donnees","tant","que","hf","fh","en","a","e",""))
     
     # CrÃ©ation de la matrice documents termes
     corpus.token <- corpus %>%
         tokens(remove_numbers = TRUE,remove_symbols = TRUE,remove_url = TRUE)%>%
-        tokens_remove(mots_vides)%>%
+        tokens_remove(mots_vides) %>%
         dfm()
     
     # Liste des maÃ®trises Ã  matcher avec la matrice documents-termes.
     maitrise <- c("python","r","sql","nosql","knime","tableau","powerbi","sas","azure","aws","statistique","mongodb","hadoop","spark","matlab","scala","java","git","github","gitlab","qliksense","cloud","excel","gcp","hive","qlikview","qlik","talend")
-    
-    # Match avec 
-    map.dmt <- dfm_match(corpus.token,features = maitrise)
-    dfMap <- convert(map.dmt,to="data.frame")
+
+    # map.dmt <- quanteda::dfm_match(dfm(corpus.token),maitrise)
+    dfMap <- convert(corpus.token,to="data.frame")
     
     dfMap$doc_id <- NULL
     
+    dfMap <- dfMap %>% select(one_of(maitrise))
+
     liste_maitrise <- apply(dfMap, 1, function(x){
         index <- which(x>0)
         return(names(dfMap)[index])
     })
-    
+
     df_maitrise <- c()
     for(i in liste_maitrise){
         if(length(i) == 0){
@@ -237,20 +246,22 @@ server <- shinyServer(function(input, output, session) {
         }
         df_maitrise <- rbind(df_maitrise, toString(i))
     }
-    
+
     query_carte_filtered <- cbind(query_carte_filtered, df_maitrise)
     
     ######################################
     #           Partie carte             #
     ######################################
     
+
     # PrÃ©paration des donnÃ©es Ã  afficher sur la carte
     map_data <- paste("IntitulÃ© : ", query_carte_filtered$intitule, "<br/>", "Type contrat : ", query_carte_filtered$type_contrat, "<br/>", "ExpÃ©rience requise : ", query_carte_filtered$experience, "<br/>", "CompÃ©tences requises : ", query_carte_filtered$df_maitrise)
-    
+
+   
     # Carte
     output$carte <- renderLeaflet({leaflet(map_data) %>%
     addProviderTiles(providers$OpenStreetMap.Mapnik, group = "Open Street Map", options = providerTileOptions(noWrap = TRUE)) %>%
-        addMarkers(lat = query_carte_filtered$latitude, lng = query_carte_filtered$longitude, popup = map_data, clusterOptions = markerClusterOptions(), labelOptions = labelOptions(textsize = "15px")) %>%
+        addMarkers(lat = query_carte_filtered$latitude, lng = query_carte_filtered$longitude, popup = map_data, clusterOptions = markerClusterOptions()) %>%
         addLayersControl(
             baseGroups = c("Open Street Map"),
             position = c("topleft"),
@@ -323,8 +334,9 @@ server <- shinyServer(function(input, output, session) {
         freq_terms_var <- textstat_frequency(dmt,groups = statut)
       }
       
-      #suppose que c'est une list de termes 
+      #liste des termes saisi par l'utilisateur 
       var <- input$multinput
+      #bloque pour afficher uniquement 5 variables 
       if(length(var)> 5){
         var <- var[1:5]
       }

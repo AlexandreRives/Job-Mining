@@ -62,7 +62,7 @@ corpus <- corpus(df,text_field='description')
 mots_vides <- quanteda::stopwords(language = 'fr')
 mots_vides <- c(mots_vides,c("data","donnee","donnees","tant","que","hf","fh","en","a","e",""))
 
-quanteda_options(verbose = TRUE)
+#quanteda_options(verbose = TRUE)
 
 corpus.token <- corpus %>%
   tokens(remove_numbers = TRUE,remove_symbols = TRUE,remove_url = TRUE)%>%
@@ -88,10 +88,34 @@ maitrise <- c("python","r","sql","nosql","knime","tableau","powerbi","sas","azur
 map.dmt <- dfm_match(corpus.token,features = maitrise)
 dfMap <- convert(map.dmt,to="data.frame")
 
+dfMap$doc_id <- NULL
+
+liste_maitrise <- apply(dfMap, 1, function(x){
+  index <- which(x>0)
+  return(names(dfMap)[index])
+})
+
+df_maitrise <- c()
+for(i in liste_maitrise){
+  df_maitrise <- rbind(df_maitrise, toString(i))
+}
+df_maitrise
+
 #fréquence des termes 
 
 freq_term <- textstat_frequency(corpus.mindim)
 head(freq_term)
 tail(freq_term)
+
+
+
+library(jsonlite)
+library(purrr)
+library(data.table)
+
+dt_list <- map(liste_maitrise, as.data.table)
+dt <- rbindlist(dt_list, fill = TRUE, idcol = T)
+
+dt
 
 
