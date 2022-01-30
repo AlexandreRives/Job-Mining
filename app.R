@@ -12,7 +12,7 @@ rm(list=ls())
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
  # Fonction de verification pour installation des packages
-packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda", "quanteda.textstats", "dplyr")
+packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny","shinyWidgets", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda", "quanteda.textstats", "dplyr")
 
 
 package.check <- lapply(
