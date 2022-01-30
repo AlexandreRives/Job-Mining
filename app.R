@@ -12,7 +12,7 @@ rm(list=ls())
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 # Fonction de verification pour installation des packages
-packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda", "quanteda.textstats")
+packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny","shinyWidgets", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda", "quanteda.textstats")
 
 package.check <- lapply(
     packages,
@@ -23,6 +23,19 @@ package.check <- lapply(
         }
     }
 )
+
+
+
+word_data <- c("python","r","java","javascript","scala","cloud","spark","analyst","analyse",
+               "scientist","science","azure","talend","qlik","ia","engineering","engineer",
+               "learning","deep","analyser","aide","algorithme","decision","predictive","predictif",
+               "predictives","alimenter","alimente","datawarehouse","etl","bi","gestion","modelisation",
+               "backlog","business","management","manager","powerbi","entrepot","entrepots","reporting",
+               "powerplateform","saas","sas","api","lake","dynamics","sql","excel","reportings","gouvernace",
+               "jira","confluence","kafka","spec","mongodb","oracle","hadoop","SAP","datastage","MicroStrategy",
+               "informatica","kpi","kpis","scikit","learn","pandas","datalab","datalakes","batch",
+               "pipelines","hdfs","hive","hbase","cloudera","mapr","awz","gcp","docker","cassandra",
+               "elasticsearch","datacenter","it",'agile',"srum","pilotage","si")
 
 # Partie front
 ui <- shinyUI(fluidPage(
@@ -62,11 +75,11 @@ ui <- shinyUI(fluidPage(
             
             tabItems(
                 
-                #Tableau récapitulatif des offres
+                #Tableau rÃ©capitulatif des offres
                 tabItem(
                     tabName = "resume",
-                    # Bouton rafraîchir
-                    fluidRow(box(width = 12, title = "Résume des offres", actionButton(inputId = "update", label = "Charger les données", icon(name = "sync", class = "fas fa-sync"), width = "20%"))),
+                    # Bouton rafraÃ®chir
+                    fluidRow(box(width = 12, title = "RÃ©sume des offres", actionButton(inputId = "update", label = "Charger les donnÃ©es", icon(name = "sync", class = "fas fa-sync"), width = "20%"))),
                     fluidRow(
                         DT::DTOutput("resumeOffres")
                     )
@@ -79,14 +92,20 @@ ui <- shinyUI(fluidPage(
                     
                 ),
                 
-                #Analyse d une offre
-                tabItem(
-                    tabName = "offre"
-                ),
-                
                 #Analyse du corpus
                 tabItem(
                     tabName = "corpus", 
+                    fluidRow(
+                    column(
+                      width=6,sliderInput("slider","Nombre de mots : ",min = 1,max = 25 ,value = 5),
+                      plotOutput("plot_freq")),
+                    column(
+                      width=6,
+                      div(style="height: 10px",
+                      selectInput("select","Axe d'analyse :",choices = c("Type contrat","Experiences","Statut")),
+                      multiInput(inputId = "multinput",label = "Selectionner au maximum 5 mots :",selected = "python",choices = word_data,width = "450px"),
+                      plotOutput("plot2")))
+                    )
                 )
                     
             )
@@ -100,7 +119,7 @@ ui <- shinyUI(fluidPage(
 # Partie serveur
 server <- shinyServer(function(input, output, session) {
     
-    # Fonction nettoyage de données :
+    # Fonction nettoyage de donnÃ©es :
     nettoyage <- function(document){
         #passe en miniature 
         document <- tolower(document)
@@ -111,11 +130,11 @@ server <- shinyServer(function(input, output, session) {
         #retire les chiffres
         document <- gsub("[0-9]","",document)
         #retire les accents
-        document <- gsub("[éèëê]","e",document)
-        document <- gsub("[àäâ]","a",document)
-        document <- gsub("[îï]","i",document)
-        document <- gsub("[üû]","u",document)
-        document <- gsub("[öô]","o",document)
+        document <- gsub("[Ã©Ã¨Ã«Ãª]","e",document)
+        document <- gsub("[Ã Ã¤Ã¢]","a",document)
+        document <- gsub("[Ã®Ã¯]","i",document)
+        document <- gsub("[Ã¼Ã»]","u",document)
+        document <- gsub("[Ã¶Ã´]","o",document)
     }
     
     ######################################
@@ -149,8 +168,8 @@ server <- shinyServer(function(input, output, session) {
     api_JSON <- jsonlite::fromJSON(request_utf, flatten = TRUE)
     # dfOffres <- data.frame(api_JSON$resultats$id, api_JSON$resultats$intitule, api_JSON$resultats$dateCreation, api_JSON$resultats$typeContrat, api_JSON$resultats$experienceLibelle, api_JSON$resultats$qualificationLibelle)
     # dfPartenaires <- data.frame()
-    # #Récupérer tous les partenaires
-    # #Récupérer tous les logos
+    # #RÃ©cupÃ©rer tous les partenaires
+    # #RÃ©cupÃ©rer tous les logos
     # #Faire dfOffres final
     # print(dfOffres)
     
@@ -166,7 +185,7 @@ server <- shinyServer(function(input, output, session) {
     # }
     
     ######################################
-    #        Partie résumé des offres    #
+    #        Partie rÃ©sumÃ© des offres    #
     ######################################
     
     # Affichage des offres :
@@ -175,12 +194,12 @@ server <- shinyServer(function(input, output, session) {
     dbDisconnect(db)
     output$resumeOffres <- DT::renderDT({data=query_offres}, filter = 'top', options = list(lengthMenu = c(5, 10, 20), pageLength = 20, scrollX = TRUE))
     
-    # Connexion à la base de données
+    # Connexion Ã  la base de donnÃ©es
     db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
     query_carte <- dbGetQuery(db, paste0("SELECT intitule, type_contrat, experience, latitude, longitude, description FROM offre;"))
     dbDisconnect(db)
     
-    # Filtres sur les coordonnées erronées
+    # Filtres sur les coordonnÃ©es erronÃ©es
     query_carte_filtered <- query_carte[query_carte$longitude < 10,]
     
     # Select des descriptions pour affichage sur la popup de la carte.
@@ -191,13 +210,13 @@ server <- shinyServer(function(input, output, session) {
     mots_vides <- quanteda::stopwords(language = 'fr')
     mots_vides <- c(mots_vides,c("data","donnee","donnees","tant","que","hf","fh","en","a","e",""))
     
-    # Création de la matrice documents termes
+    # CrÃ©ation de la matrice documents termes
     corpus.token <- corpus %>%
         tokens(remove_numbers = TRUE,remove_symbols = TRUE,remove_url = TRUE)%>%
         tokens_remove(mots_vides)%>%
         dfm()
     
-    # Liste des maîtrises à matcher avec la matrice documents-termes.
+    # Liste des maÃ®trises Ã  matcher avec la matrice documents-termes.
     maitrise <- c("python","r","sql","nosql","knime","tableau","powerbi","sas","azure","aws","statistique","mongodb","hadoop","spark","matlab","scala","java","git","github","gitlab","qliksense","cloud","excel","gcp","hive","qlikview","qlik","talend")
     
     # Match avec 
@@ -214,7 +233,7 @@ server <- shinyServer(function(input, output, session) {
     df_maitrise <- c()
     for(i in liste_maitrise){
         if(length(i) == 0){
-            i <- "Non renseigné"
+            i <- "Non renseignÃ©"
         }
         df_maitrise <- rbind(df_maitrise, toString(i))
     }
@@ -225,8 +244,8 @@ server <- shinyServer(function(input, output, session) {
     #           Partie carte             #
     ######################################
     
-    # Préparation des données à afficher sur la carte
-    map_data <- paste("Intitulé : ", query_carte_filtered$intitule, "<br/>", "Type contrat : ", query_carte_filtered$type_contrat, "<br/>", "Expérience requise : ", query_carte_filtered$experience, "<br/>", "Compétences requises : ", query_carte_filtered$df_maitrise)
+    # PrÃ©paration des donnÃ©es Ã  afficher sur la carte
+    map_data <- paste("IntitulÃ© : ", query_carte_filtered$intitule, "<br/>", "Type contrat : ", query_carte_filtered$type_contrat, "<br/>", "ExpÃ©rience requise : ", query_carte_filtered$experience, "<br/>", "CompÃ©tences requises : ", query_carte_filtered$df_maitrise)
     
     # Carte
     output$carte <- renderLeaflet({leaflet(map_data) %>%
@@ -242,6 +261,83 @@ server <- shinyServer(function(input, output, session) {
     ######################################
     #        Partie analyse du corpus    #
     ######################################
+    
+    #connexion base de données 
+    conn <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
+    
+    df <- dbGetQuery(conn,"SELECT * FROM offre")
+    
+    dbDisconnect(conn)
+    #nettoyage de la description
+    df$description <- nettoyage(df$description)
+    
+    #creation du corpus 
+    corpus <- quanteda::corpus(df,text_field='description')
+    
+    #creation list des mots interessant
+    
+    #tokenize : vérifie que tout les nombres et caratère spéciaux on bien été supprimé
+    tokens <- tokens(corpus,remove_numbers = TRUE,remove_symbols = TRUE)
+    
+    #selection des mots dans corpus 
+    tokens_spw <- tokens %>%
+      tokens_select(pattern = word_data,selection = "keep")
+    
+    #création de la matrice doc-termes
+    dmt <- dfm(tokens_spw)
+    
+    #============================#
+    #       Sortie graphique 
+    #============================#
+    
+    output$plot_freq <- renderPlot({
+      
+      #df fréquence des mots du corpus
+      freq_terms <- textstat_frequency(dmt)
+      
+      n = input$slider
+      
+      titre <- paste("Top",n,"des mots présents dans le corpus")
+      
+      #ggplot frequence d'apparition dans le corpus (unique)
+      ggplot(data=freq_terms[1:n,], aes(x=reorder(feature,desc(docfreq)), y=docfreq)) +
+        geom_bar(stat="identity",fill="lightblue")+
+        theme(axis.text.x=element_text(angle = -90, hjust = 0))+
+        geom_text(aes(label=docfreq), vjust=1.6, color="black", size=3.5)+
+        ggtitle(titre) +
+        xlab("Mots du corpus") + ylab("Doc freq")
+      
+      
+    })
+    
+    #deuxieme graphique en fonction des autres axes 
+    
+    output$plot2 <- renderPlot({
+      #df freq en fonction var 
+      
+      if(input$select == "Type contrat"){
+        freq_terms_var <- textstat_frequency(dmt,groups = type_contrat)
+      } else if (input$select == "Experiences") {
+        freq_terms_var <- textstat_frequency(dmt,groups = experience)
+      } else if (input$select == "Statut") {
+        freq_terms_var <- textstat_frequency(dmt,groups = statut)
+      }
+      
+      #suppose que c'est une list de termes 
+      var <- input$multinput
+      if(length(var)> 5){
+        var <- var[1:5]
+      }
+      selecvar <- freq_terms_var[freq_terms_var$feature %in% var,]
+      
+      # Utiliser position = position_dodge()
+      ggplot(data=selecvar, aes(x=feature, y=docfreq, fill=group)) +
+        geom_bar(stat="identity", position=position_dodge())+
+        ggtitle("Fréquence des mots du corpus par axe") +
+        xlab("Mots du corpus") + ylab("Doc freq")
+      
+
+    })
     
     
 })
