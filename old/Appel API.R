@@ -5,8 +5,8 @@ library(RSQLite)
 library(DBI)
 
 # Stockage des identifiants
-client_id = "PAR_jobmining_ed402730d0bb4b6d057f41779bb1bab6b08a49e3317ad626c547dc3b055d94cc"
-client_secret = "aad6d0b817f01e18114af8dc89c0188a4922043e119b59a467bc2b20a2f88967"
+client_id = "PAR_projettextmining_8c23292b85bd39841eee81f31aacfdbb703b8fb078a132a7ccdbff5a5933f949"
+client_secret = "5d1c87fcfe5e20d59b1cf74c299bfcedb4da5e6200bef0faf624e7cceb22f94b"
 
 # Création de la liste des options pour la requête POST du token
 request_body <- list(grant_type = "client_credentials",
@@ -52,8 +52,12 @@ dbExecute(db, "CREATE TABLE offre (id_offre TEXT PRIMARY KEY, intitule TEXT, des
 dbGetQuery(db, "SELECT * from offre")
 dbDisconnect(db)
 #unlink("corpus_offre_data.sqlite")
-
+db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
 # Script pour insertion des données.
+dbWriteTable(db,name = "offre",value = dfOffres,append=TRUE)
+dbDisconnect(db)
+
+
 query <- paste("INSERT INTO offre VALUES(",paste(entreprises[1,], collapse =","), ")")
 query
 
