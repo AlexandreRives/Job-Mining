@@ -37,6 +37,10 @@ word_data <- c("python","r","java","javascript","scala","cloud","spark","analyst
                "pipelines","hdfs","hive","hbase","cloudera","mapr","awz","gcp","docker","cassandra",
                "elasticsearch","datacenter","it",'agile',"srum","pilotage","si")
 
+VB_style <- function(msg = 'Hello', style="font-size: 100%;"){
+  tags$p( msg , style = style )
+}
+
 # Affichage des offres
 db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
 query_offres <- dbGetQuery(db, paste0("SELECT id_offre, intitule, date_parution, logo, experience, type_contrat FROM offre;"))
@@ -127,17 +131,25 @@ ui <- shinyUI(fluidPage(
                 
                 #Analyse du corpus
                 tabItem(
-                    tabName = "corpus", 
+                    tabName = "corpus",
+                    box(h1("Analyse du corpus"),width = "100%"),
+                    fluidRow(column(width=4,h2("Offres ")),  
+                             column(width=4 ,h2("Top métier ")),
+                             column(width=4,h2("Offre débutant "))),
+                    fluidRow(
+                            valueBoxOutput("nbOffre"),
+                            valueBoxOutput("topmetier"),
+                            valueBoxOutput("jobdeb")),
                     fluidRow(
                     column(
-                      width=6,sliderInput("slider","Nombre de mots : ",min = 1,max = 25 ,value = 5),
-                      plotOutput("plot_freq")),
+                      width=6,sliderInput("slider","Nombre de mots : ",min = 1,max = 25 ,value = 5,width="70%"),
+                      plotOutput("plot_freq", height = "650px")),
                     column(
                       width=6,
                       div(style="height: 10px",
                       selectInput("select","Axe d'analyse :",choices = c("Type contrat","Expériences","Statut")),
-                      multiInput(inputId = "multinput",label = "Sélectionner au maximum 5 mots :",selected = "python",choices = word_data,width = "450px"),
-                      plotOutput("plot2")))
+                      multiInput(inputId = "multinput",label = "Sélectionner au maximum 5 mots :",selected = c("python","scala"),choices = word_data,width = "auto"),
+                      plotOutput("plot2",width = "100%")))
                     )
                 )
                     
@@ -410,11 +422,11 @@ server <- shinyServer(function(input, output, session) {
       titre <- paste("Top",n,"des mots présents dans le corpus")
       
       #ggplot fréquence d'apparition dans le corpus (unique)
-      ggplot(data=freq_terms[1:n,], aes(x=reorder(feature,desc(docfreq)), y=docfreq)) +
+      ggplot(data=freq_terms[1:n,], aes(x=reorder(feature,docfreq), y=docfreq)) +
         geom_bar(stat="identity",fill="lightblue")+
         theme(axis.text.x=element_text(angle = -90, hjust = 0))+
         geom_text(aes(label=docfreq), vjust=1.6, color="black", size=3.5)+
-        ggtitle(titre) +
+        ggtitle(titre) + coord_flip()+
         xlab("Mots du corpus") + ylab("Doc freq")
       
     })
@@ -443,10 +455,105 @@ server <- shinyServer(function(input, output, session) {
       ggplot(data=selecvar, aes(x=feature, y=docfreq, fill=group)) +
         geom_bar(stat="identity", position=position_dodge())+
         ggtitle("Fréquence des mots du corpus par axe") +
+        geom_text(aes(label=docfreq), vjust=1.6, color="black", size=5)+
+        theme(axis.text.x=element_text(angle = -60, hjust = 0,size = 15))+
         xlab("Mots du corpus") + ylab("Doc freq")
       
+      
+      
     })
+    
+    #=======================#
+    #   Analyse des KPI 
+    #=======================#
+    
+    #gestion des décimals 
+    options(digits = 2)
+    
+    #     nombre d'offre analyser 
+    nb_offre <- nrow(df)
+    
+    # output$nbOffre <- renderText({
+    #   paste("Dans notre analyse s'effectue sur ",nb_offre," offres d'emploie.")
+    # })
+    
+    output$nbOffre <- renderValueBox({
+      valueBox(
+        VB_style( paste0(nb_offre), "font-size: 60%;"  ),
+        "Total des offres récupéré", 
+        #icon = icon('', lib = 'glyphicon'), # icon("sign-in"),
+        color = "teal"
+      )
+    })
+    
+    #      métier le plus représenté 
+    metier <- c("analyst","scientist","engin","manageur","consult")
+    
+    df$intitule <- nettoyage(df$intitule)
+    
+    #creation du corpus 
+    corpus_int <- quanteda::corpus(df,text_field='intitule')
+    
+    #création liste des mots intéressants
+    
+    #tokenize : vÃ©rifie que tout les nombres et caratÃ¨re spÃ©ciaux on bien Ã©tÃ© supprimÃ©
+    tokens_int <- tokens(corpus_int,remove_numbers = TRUE,remove_symbols = TRUE)%>%
+      tokens_wordstem()
+    
+    #selection des mots dans corpus 
+    tokens_int_spw <- tokens_int %>%
+      tokens_select(pattern = metier,selection = "keep")
+    
+    
+    #crÃ©ation de la matrice doc-termes
+    dmt_int <- dfm(tokens_int_spw)
+    
+    #compte fréquence des intitule
+    freq_terms_int <- textstat_frequency(dmt_int)
+    
+    top1metier <- freq_terms_int[order(freq_terms_int$docfreq,decreasing = TRUE)][1]
+    
+    pourcent <- (top1metier$docfreq/nrow(df))*100
+    
+    # output$topmetier <- renderText({
+    #   paste("Le métier le plus représenté dans nos données est data ",top1metier$feature,
+    #         "avec ",round(pourcent,2),"% d'offres")
+    # })
+    
+    output$topmetier <- renderValueBox({
+      valueBox(
+        VB_style( paste0("Data ",top1metier$feature), "font-size: 60%;"  ),
+        paste0(" est le metier plus demandé à ",round(pourcent,2),"%"),
+        icon = icon('briefcase', lib = 'glyphicon'), # icon("sign-in")
+        color = "teal"
+      )
+    })
+    
+    
+    #     nombre d'offre avec % offre pour les débutent 
+    
+    freq_terms_var_expe <- textstat_frequency(dmt,groups = experience)
+    
+    deb <- freq_terms_var_expe[grep("Début.",freq_terms_var_expe$group),]
+    
+    deb_pourcent <- (nrow(deb)/nrow(df))*100
+    
+    # output$jobdeb <- renderText({
+    #   paste(round(deb_pourcent,2),"% des offres acceptent des débutants.")
+    # })
+    
+    output$jobdeb <- renderValueBox({
+      valueBox(
+        VB_style( paste0(round(deb_pourcent,2),"%"), "font-size: 60%;"  ),
+        "sont des offres pour les débutants",
+        icon = icon('education', lib = 'glyphicon'), # icon("sign-in"),
+        color = "teal"
+      )
+    })
+    
     
 })
 
 shinyApp(ui = ui, server = server)
+
+
