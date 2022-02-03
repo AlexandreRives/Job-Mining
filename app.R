@@ -38,7 +38,7 @@ word_data <- c("python","r","java","javascript","scala","cloud","spark","analyst
                "elasticsearch","datacenter","it",'agile',"srum","pilotage","si")
 
 VB_style <- function(msg = 'Hello', style="font-size: 100%;"){
-  tags$p(msg , style = style )
+  tags$p( msg , style = style )
 }
 
 # Affichage des offres
@@ -450,6 +450,8 @@ server <- shinyServer(function(input, output, session) {
         theme(axis.text.x=element_text(angle = -60, hjust = 0,size = 15, face = "bold"))+
         xlab("Mots du corpus") + ylab("Doc freq")
       
+      
+      
     })
     
     #=======================#
@@ -526,3 +528,5 @@ server <- shinyServer(function(input, output, session) {
 })
 
 shinyApp(ui = ui, server = server)
+
+
