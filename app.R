@@ -12,7 +12,7 @@ rm(list=ls())
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 # Fonction de vérification pour installation des packages
-packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny","shinyWidgets", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda", "quanteda.textstats", "dplyr", "data.table")
+packages = c("shinyjs", "leaflet", "shinydashboard", "shinycssloaders", "shiny","shinyWidgets", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda", "quanteda.textstats", "dplyr", "data.table", "quanteda.textmodels")
 
 
 package.check <- lapply(
@@ -37,6 +37,10 @@ word_data <- c("python","r","java","javascript","scala","cloud","spark","analyst
                "pipelines","hdfs","hive","hbase","cloudera","mapr","awz","gcp","docker","cassandra",
                "elasticsearch","datacenter","it",'agile',"srum","pilotage","si")
 
+VB_style <- function(msg = 'Hello', style="font-size: 100%;"){
+  tags$p(msg , style = style )
+}
+
 # Affichage des offres
 db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
 query_offres <- dbGetQuery(db, paste0("SELECT id_offre, intitule, date_parution, logo, experience, type_contrat FROM offre;"))
@@ -49,7 +53,7 @@ query_offres <-rename(query_offres, c("N° Offre"="id_offre", "Intitulé de l'of
                                       "Partenaire"="logo","Type de contrat"="type_contrat","Expérience"="experience"))
 dbDisconnect(db)
 
-affichage_offres <- reactiveValues(data = query_offres)
+affichage_data <- reactiveValues(data = query_offres)
 
 # library(leaflet)
 # library(shinydashboard)
@@ -111,7 +115,7 @@ ui <- shinyUI(fluidPage(
                     # Bouton rafraîchir
 
                     fluidRow(box(width = 12, title = "Résume des offres", 
-                                 actionButton(inputId = "update", label = "Charger les données", icon(name = "sync", class = "fas fa-sync fa-spin"), width = "20%"))),
+                                 actionButton(inputId = "update", label = "Charger les données", icon(name = "sync", class = "fas fa-sync"), width = "20%"))),
 
                     fluidRow(
                         DT::DTOutput("resumeOffres")
@@ -127,18 +131,26 @@ ui <- shinyUI(fluidPage(
                 
                 #Analyse du corpus
                 tabItem(
-                    tabName = "corpus", 
-                    fluidRow(
+                  tabName = "corpus",
+                  fluidRow(box(title = "Analyse du corpus", width = 12)),
+                  fluidRow(column(width=4,h2("Offres")),  
+                           column(width=4 ,h2("Top métier")),
+                           column(width=4,h2("Offre débutant"))),
+                  fluidRow(
+                    valueBoxOutput("nbOffre"),
+                    valueBoxOutput("topmetier"),
+                    valueBoxOutput("jobdeb")),
+                  fluidRow(
                     column(
-                      width=6,sliderInput("slider","Nombre de mots : ",min = 1,max = 25 ,value = 5),
-                      plotOutput("plot_freq")),
+                      width=6,sliderInput("slider","Nombre de mots : ",min = 1,max = 25 ,value = 10, width="70%"),
+                      plotOutput("plot_freq", height = "800px")),
                     column(
                       width=6,
                       div(style="height: 10px",
-                      selectInput("select","Axe d'analyse :",choices = c("Type contrat","Expériences","Statut")),
-                      multiInput(inputId = "multinput",label = "Sélectionner au maximum 5 mots :",selected = "python",choices = word_data,width = "450px"),
-                      plotOutput("plot2")))
-                    )
+                          selectInput("select","Axe d'analyse :",choices = c("Type contrat","Expériences","Statut")),
+                          multiInput(inputId = "multinput",label = "Sélectionner au maximum 5 mots :",selected = c("python","r"),choices = word_data,width = "auto"),
+                          plotOutput("plot2", height = "600px")))
+                  )
                 )
                     
             )
@@ -259,10 +271,10 @@ server <- shinyServer(function(input, output, session) {
       New_offers <- setDT(offre)[!data, on="id_offre"]
       
       # insertion 
-      # if(nrow(data>500)){
-      #   # supprimer les 150 premiÃ¨res lignes
-      #   dbExecute(db,paste0("DELETE FROM offre WHERE id_offre IN (SELECT id_offre FROM offre ORDER BY id_offre LIMIT 150);"))
-      # }
+      if(nrow(data)>400){
+        # supprimer les 150 premières lignes
+        dbExecute(db,paste0("DELETE FROM offre WHERE id_offre IN (SELECT id_offre FROM offre ORDER BY id_offre LIMIT 150);"))
+      }
 
       dbWriteTable(db, name ="offre", value = New_offers,append=TRUE)
       
@@ -287,19 +299,8 @@ server <- shinyServer(function(input, output, session) {
     #        Partie résumé des offres  #
     ######################################
     
-    # Affichage des offres :
-    # db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
-    # query_offres <- dbGetQuery(db, paste0("SELECT id_offre, intitule, date_parution, partenaire, logo, experience, type_contrat FROM offre;"))
-    # 
-    # # Retraitement des adresses web des logos
-    # query_offres$logo<-paste0('<img src="',query_offres$logo, '"/>')
-    # 
-    # #renommer les colonnes de la table des offres 
-    # query_offres <-rename(query_offres, c("NÂ° Offre"="id_offre", "Intitule de l'offre"="intitule", "Date de parution"="date_parution",
-    #                                       "Partenaire"="logo","Type de contrat"="type_contrat","ExpÃ©rience"="experience"))
-    
     # Affichage de tous les elements
-    output$resumeOffres <- DT::renderDT({DT::datatable(affichage_offres$data,escape = FALSE)}, options = list(lengthMenu = c(5, 10, 20), pageLength = 20, scrollX = TRUE))
+    output$resumeOffres <- DT::renderDT({DT::datatable(affichage_data$data,escape = FALSE)}, options = list(lengthMenu = c(5, 10, 20), pageLength = 20, scrollX = TRUE))
     
     ######################################
     #           Partie carte             #
@@ -372,7 +373,8 @@ server <- shinyServer(function(input, output, session) {
     #        Partie analyse du corpus    #
     ######################################
     
-    # connexion base de données 
+    # connexion base de données
+    
     conn <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
     
     df <- dbGetQuery(conn,"SELECT * FROM offre")
@@ -386,7 +388,7 @@ server <- shinyServer(function(input, output, session) {
     
     #création liste des mots intéressants
     
-    #tokenize : vÃ©rifie que tout les nombres et caratÃ¨re spÃ©ciaux on bien Ã©tÃ© supprimÃ©
+    #tokenize : vérifie que tout les nombres et caratÃ¨re spÃ©ciaux on bien Ã©tÃ© supprimÃ©
     tokens <- tokens(corpus,remove_numbers = TRUE,remove_symbols = TRUE)
     
     #selection des mots dans corpus 
@@ -410,11 +412,11 @@ server <- shinyServer(function(input, output, session) {
       titre <- paste("Top",n,"des mots présents dans le corpus")
       
       #ggplot fréquence d'apparition dans le corpus (unique)
-      ggplot(data=freq_terms[1:n,], aes(x=reorder(feature,desc(docfreq)), y=docfreq)) +
+      ggplot(data=freq_terms[1:n,], aes(x=reorder(feature,docfreq), y=docfreq)) +
         geom_bar(stat="identity",fill="lightblue")+
-        theme(axis.text.x=element_text(angle = -90, hjust = 0))+
+        theme(axis.text.x=element_text(angle = -90, hjust = 0), axis.text.y = element_text(size = 15, face = "bold"))+
         geom_text(aes(label=docfreq), vjust=1.6, color="black", size=3.5)+
-        ggtitle(titre) +
+        ggtitle(titre) + coord_flip()+
         xlab("Mots du corpus") + ylab("Doc freq")
       
     })
@@ -443,8 +445,82 @@ server <- shinyServer(function(input, output, session) {
       ggplot(data=selecvar, aes(x=feature, y=docfreq, fill=group)) +
         geom_bar(stat="identity", position=position_dodge())+
         ggtitle("Fréquence des mots du corpus par axe") +
+        geom_text(aes(x=feature, y=docfreq, label=docfreq,group=group), position = position_dodge(width = 1),
+                  color="black", size=3.5)+
+        theme(axis.text.x=element_text(angle = -60, hjust = 0,size = 15, face = "bold"))+
         xlab("Mots du corpus") + ylab("Doc freq")
       
+    })
+    
+    #=======================#
+    #   Analyse des KPI 
+    #=======================#
+    
+    #gestion des décimals
+    options(digits = 2)
+    
+    # nombre d'offres analysées
+    nb_offre <- nrow(df)
+    
+    output$nbOffre <- renderValueBox({
+      valueBox(
+        VB_style(paste0(nb_offre), "font-size: 60%;"),
+        "total des offres récupérées", 
+        color = "teal"
+      )
+    })
+    
+    # métier le plus représenté 
+    metier <- c("analyst","scientist","engin","manager","consult")
+    
+    df$intitule <- nettoyage(df$intitule)
+    
+    #creation du corpus 
+    corpus_int <- quanteda::corpus(df,text_field='intitule')
+    
+    #création liste des mots intéressants
+    
+    #tokenize : vérifie que tous les nombres et caratères spéciaux ont bien été supprimés
+    tokens_int <- tokens(corpus_int,remove_numbers = TRUE,remove_symbols = TRUE)%>%
+      tokens_wordstem()
+    
+    #sélection des mots dans corpus
+    tokens_int_spw <- tokens_int %>%
+      tokens_select(pattern = metier,selection = "keep")
+    
+    
+    #création de la matrice doc-termes
+    dmt_int <- dfm(tokens_int_spw)
+    
+    #compte fréquence des intitulés
+    freq_terms_int <- textstat_frequency(dmt_int)
+    
+    top1metier <- freq_terms_int[order(freq_terms_int$docfreq,decreasing = TRUE)][1]
+    
+    pourcent <- (top1metier$docfreq/nrow(df))*100
+    
+    output$topmetier <- renderValueBox({
+      valueBox(
+        VB_style( paste0("Data ",top1metier$feature), "font-size: 60%;"  ),
+        paste0(" est le metier le plus présent à ",round(pourcent,2),"%"),
+        color = "teal"
+      )
+    })
+    
+    # nombre d'offre avec % d'offre pour les débutants
+    
+    freq_terms_var_expe <- textstat_frequency(dmt,groups = experience)
+    
+    deb <- freq_terms_var_expe[grep("Début.",freq_terms_var_expe$group),]
+    
+    deb_pourcent <- (nrow(deb)/nrow(df))*100
+    
+    output$jobdeb <- renderValueBox({
+      valueBox(
+        VB_style( paste0(round(deb_pourcent,2),"%"), "font-size: 60%;"),
+        "sont des offres pour les débutants",
+        color = "teal"
+      )
     })
     
 })
