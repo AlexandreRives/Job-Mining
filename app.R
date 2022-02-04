@@ -12,7 +12,8 @@ rm(list=ls())
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 # Fonction de vérification pour installation des packages
-packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny","shinyWidgets", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda", "quanteda.textstats", "dplyr", "data.table")
+packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny","shinyWidgets", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda", "quanteda.textstats", "dplyr", "data.table","quanteda.textmodels")
+
 
 
 package.check <- lapply(
@@ -89,8 +90,8 @@ ui <- shinyUI(fluidPage(
             sidebarMenu(
                 menuItem("Résume des offres", tabName = "resume", icon = icon("table")),
                 menuItem("Carte des offres", tabName = "carte", icon = icon("map-marked-alt")),
-                menuItem("Analyse d'un document", tabName = "offre", icon = icon("file")),
                 menuItem("Analyse d'un corpus", tabName = "corpus", icon = icon("archive")),
+                menuItem("Analyse sémantique latente", tabName = "lsa", icon = icon("file")),
                 HTML(paste0(
                     "<br><br><br><br><br><br><br><br><br>",
                     "<table style='margin-left:auto; margin-right:auto;'>",
@@ -115,17 +116,17 @@ ui <- shinyUI(fluidPage(
                     # Bouton rafraîchir
 
                     fluidRow(box(width = 12, title = "Résume des offres", 
-                                 actionButton(inputId = "update", label = "Charger les données", icon(name = "sync", class = "fas fa-sync"), width = "20%"))),
+                                 actionButton(inputId = "update", label = "Charger les données", icon(name = "sync", class = "fas fa-sync"), width = "20%" ))),
 
                     fluidRow(
-                        DT::DTOutput("resumeOffres")
+                        addSpinner(DT::DTOutput("resumeOffres"), spin = "circle", color="black")
                     )
                 ),
 
                 #Carte
                 tabItem(tabName = "carte",
 
-                    leafletOutput("carte")
+                    addSpinner(leafletOutput("carte"), spin = "circle", color = "black")
                     
                 ),
                 
@@ -146,11 +147,19 @@ ui <- shinyUI(fluidPage(
                       plotOutput("plot_freq", height = "800px")),
                     column(
                       width=6,
-                      div(style="height: 10px",
+                      
                           selectInput("select","Axe d'analyse :",choices = c("Type contrat","Expériences","Statut")),
                           multiInput(inputId = "multinput",label = "Sélectionner au maximum 5 mots :",selected = c("python","r"),choices = word_data,width = "auto"),
-                          plotOutput("plot2", height = "600px")))
+                          plotOutput("plot2", height = "600px"))
                   )
+                ),
+                tabItem(tabName = "lsa",
+                        
+                        fluidRow(box(title = "Analyse sémantique latente", width = 12)),
+                        fluidRow(
+                          column(width = 6, plotOutput("plot_doc",height = "600px")),
+                          column(width=6,plotOutput("plot_txt",height = "600px")))
+                        
                 )
                     
             )
@@ -163,6 +172,13 @@ ui <- shinyUI(fluidPage(
 
 # Partie serveur
 server <- shinyServer(function(input, output, session) {
+  
+    #rafraichisement des données 
+    refresh <- reactive({
+      session$reload()
+      Sys.sleep(3)
+      Sys.time()
+    })
     
     # Fonction nettoyage de données :
     nettoyage <- function(document){
@@ -271,7 +287,7 @@ server <- shinyServer(function(input, output, session) {
       New_offers <- setDT(offre)[!data, on="id_offre"]
       
       # insertion 
-      if(nrow(data)>400){
+      if(nrow(data)>500){
         # supprimer les 150 premières lignes
         dbExecute(db,paste0("DELETE FROM offre WHERE id_offre IN (SELECT id_offre FROM offre ORDER BY id_offre LIMIT 150);"))
       }
@@ -290,7 +306,9 @@ server <- shinyServer(function(input, output, session) {
       dbDisconnect(db)
       
       # Mis à jour des données
-      affichage_offres$data <- query_offres_maj
+      affichage_data$data <- query_offres_maj
+      
+      refresh()
       
     })
     
@@ -300,6 +318,7 @@ server <- shinyServer(function(input, output, session) {
     ######################################
     
     # Affichage de tous les elements
+    
     output$resumeOffres <- DT::renderDT({DT::datatable(affichage_data$data,escape = FALSE)}, options = list(lengthMenu = c(5, 10, 20), pageLength = 20, scrollX = TRUE))
     
     ######################################
@@ -524,6 +543,38 @@ server <- shinyServer(function(input, output, session) {
         color = "teal"
       )
     })
+    
+    #####################################
+    #       Analyse du corpus           #
+    #               LSA                 #
+    #####################################
+    
+    mylsa <- textmodel_lsa(dmt)
+    
+    
+    dfs <- data.frame(mylsa$docs[,1:2])
+    
+    output$plot_doc <- renderPlot({
+      ggplot(dfs, aes(X1, X2, label = rownames(dfs)))+
+        geom_point()+ geom_text() +
+        ggtitle("Projection des documents sur les deux premiers axes")+
+        xlab("Axe 1") + ylab("Axe 2")
+    })
+    
+    
+    var <- data.frame(mylsa$features[,1:2])
+    
+    output$plot_txt <- renderPlot({
+      ggplot(var, aes(X1, X2, label = rownames(var)))+
+        geom_point()+ geom_text()+
+        ggtitle("Projection des termes sur les deux premiers axes")+
+        xlab("Axe 1") + ylab("Axe 2")
+    })
+    
+    
+    
+    
+    
     
 })
 
