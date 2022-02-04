@@ -157,8 +157,8 @@ ui <- shinyUI(fluidPage(
                         
                         fluidRow(box(title = "Analyse sémantique latente", width = 12)),
                         fluidRow(
-                          column(width = 6, plotOutput("plot_doc",height = "600px")),
-                          column(width=6,plotOutput("plot_txt",height = "600px")))
+                          column(width = 6, plotOutput("plot_doc",height = "900px")),
+                          column(width=6,plotOutput("plot_txt",height = "900px")))
                         
                 )
                     
