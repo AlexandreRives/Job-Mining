@@ -245,6 +245,34 @@ server <- shinyServer(function(input, output, session) {
       statut <- api_JSON$resultats$qualificationLibelle
       experience <- api_JSON$resultats$experienceLibelle
       
+      #harmonisation de l'expérience 
+      exp <- tolower(experience)
+      exp <- gsub("[()]","",exp)
+      
+      l <- list()
+      for(i in exp){
+        if(str_detect(i,"[0-9]")){
+          if(str_detect(i,"ans")){
+            pattern <- regex(pattern = "[0-9].*",comments = FALSE)
+            var <- str_extract(i,pattern)
+            l <- c(l,var)
+          }else if (str_detect(i,"mois")){
+            parttern2 <- regex(pattern = "[0-9].",comments = FALSE)
+            nombre <- as.numeric( str_extract(i,parttern2))
+            if(nombre %% 12 == 0){
+              l <- c(l, paste(nombre/12,"ans"))
+            }else {
+              pattern <- regex(pattern = "[0-9].*",comments = FALSE)
+              var <- str_extract(i,pattern)
+              l <- c(l,var)
+            }
+          }
+          
+        }else {
+          l <-  c(l,i)
+        }
+      }
+      
       # Recodage date
       date <- strsplit(date_parution,"T",fixed = T)
       date_parution <- unlist(lapply(date, function(x){return(x[1])}))
@@ -268,6 +296,7 @@ server <- shinyServer(function(input, output, session) {
       # Mise au format chaine de caractère
       partenaire <- unlist(offre_partenaire)
       logo <- unlist(logo)
+      experience <- unlist(l)
       
       # dataframe des offres récupérées
       offre <- data.frame(cbind(id_offre,intitule,description,date_parution,latitude,longitude,type_contrat,statut,experience,partenaire,logo))
@@ -534,7 +563,7 @@ server <- shinyServer(function(input, output, session) {
     # nombre d'offre avec % d'offre pour les débutants
     freq_terms_var_expe <- textstat_frequency(dmt,groups = experience)
     
-    deb <- freq_terms_var_expe[grep("Début.",freq_terms_var_expe$group),]
+    deb <- freq_terms_var_expe[grep("début.",freq_terms_var_expe$group),]
     
     deb_pourcent <- (nrow(deb)/nrow(df))*100
     
