@@ -12,7 +12,7 @@ rm(list=ls())
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 # Fonction de vérification pour installation des packages
-packages = c("leaflet", "shinydashboard", "shinycssloaders", "shiny","shinyWidgets", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda", "quanteda.textstats", "dplyr", "data.table","quanteda.textmodels")
+packages = c("leaflet","plotly", "shinydashboard", "shinycssloaders", "shiny","shinyWidgets", "DT", "leaflet.extras", "DBI", "tidytext", "tidyverse", "tm", "RSQLite", "httr", "jsonlite", "quanteda", "quanteda.textstats", "dplyr", "data.table","quanteda.textmodels")
 
 
 
@@ -45,6 +45,7 @@ package.check <- lapply(
 # library(quanteda.textstats)
 # library(quanteda.textmodels)
 # library(ggplot2)
+# library(plotly)
 
 # Liste des mots qui nous intéressent
 word_data <- c("python","r","java","javascript","scala","cloud","spark","analyst","analyse",
@@ -151,13 +152,13 @@ ui <- shinyUI(fluidPage(
                   fluidRow(
                     column(
                       width=6,sliderInput("slider","Nombre de mots : ",min = 1,max = 25 ,value = 10, width="70%"),
-                      plotOutput("plot_freq", height = "800px")),
+                      plotlyOutput("plot_freq", height = "800px")),
                     column(
                       width=6,
                       
                           selectInput("select","Axe d'analyse :",choices = c("Type contrat","Expériences","Statut")),
                           multiInput(inputId = "multinput",label = "Sélectionner au maximum 5 mots :",selected = c("python","r"),choices = word_data,width = "auto"),
-                          plotOutput("plot2", height = "600px"))
+                          plotlyOutput("plot2", height = "600px"))
                   )
                 ),
                 tabItem(tabName = "lsa",
@@ -453,27 +454,36 @@ server <- shinyServer(function(input, output, session) {
     #       Sortie graphique 
     #============================#
     
-    output$plot_freq <- renderPlot({
+    output$plot_freq <- renderPlotly({
       
       #df fréquence des mots du corpus
       freq_terms <- textstat_frequency(dmt)
+      freq_terms_sorted <- freq_terms[order(freq_terms$docfreq,decreasing = TRUE),]
       
       n = input$slider
       
       titre <- paste("Top",n,"des mots présents dans le corpus")
       
-      #ggplot fréquence d'apparition dans le corpus (unique)
-      ggplot(data=freq_terms[1:n,], aes(x=reorder(feature,docfreq), y=docfreq)) +
-        geom_bar(stat="identity",fill="lightblue")+
-        theme(axis.text.x=element_text(angle = -90, hjust = 0), axis.text.y = element_text(size = 15, face = "bold"))+
-        geom_text(aes(label=docfreq), vjust=1.6, color="black", size=3.5)+
-        ggtitle(titre) + coord_flip()+
-        xlab("Mots du corpus") + ylab("Doc freq")
-      
+      #plotly fréquence d'apparition dans le corpus (unique)
+      plot_ly(data = freq_terms_sorted[1:n,],y = ~ feature, x = ~docfreq, type = 'bar') %>%
+        layout(title = titre,
+               plot_bgcolor='#e5ecf6', 
+               xaxis = list( 
+                 title = "Nombre d'apparitions",
+                 zerolinecolor = '#ffff', 
+                 zerolinewidth = 2, 
+                 gridcolor = 'ffff'), 
+   
+               yaxis = list( 
+                 title = "Mots du corpus",
+                 zerolinecolor = '#ffff', 
+                 zerolinewidth = 2, 
+                 gridcolor = 'ffff',
+                 categoryorder = "total ascending"))
     })
     
     #deuxième graphique en fonction des autres axes 
-    output$plot2 <- renderPlot({
+    output$plot2 <- renderPlotly({
       
       #df freq en fonction var 
       if(input$select == "Type contrat"){
@@ -493,14 +503,21 @@ server <- shinyServer(function(input, output, session) {
       selecvar <- freq_terms_var[freq_terms_var$feature %in% var,]
       
       #graphique sur la fréquence des mots du corpus
-      ggplot(data=selecvar, aes(x=feature, y=docfreq, fill=group)) +
-        geom_bar(stat="identity", position=position_dodge())+
-        ggtitle("Fréquence des mots du corpus par axe") +
-        geom_text(aes(x=feature, y=docfreq, label=docfreq,group=group), position = position_dodge(width = 1),
-                  color="black", size=3.5)+
-        theme(axis.text.x=element_text(angle = -60, hjust = 0,size = 15, face = "bold"))+
-        xlab("Mots du corpus") + ylab("Doc freq")
-      
+      plot_ly(data = selecvar,x = ~ feature, y = ~docfreq ,color = ~group, type = 'bar') %>%
+        layout(title = 'Fréquence des mots du corpus par axe',
+               plot_bgcolor='#e5ecf6', 
+               yaxis = list( 
+                 title = "Nombre d'apparitions",
+                 zerolinecolor = '#ffff', 
+                 zerolinewidth = 2, 
+                 gridcolor = 'ffff'), 
+               
+               xaxis = list( 
+                 title = "Mots du corpus",
+                 zerolinecolor = '#ffff', 
+                 zerolinewidth = 2, 
+                 gridcolor = 'ffff'
+               ))
       
       
     })
