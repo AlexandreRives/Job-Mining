@@ -26,6 +26,26 @@ package.check <- lapply(
     }
 )
 
+# library(leaflet)
+# library(shinydashboard)
+# library(shinycssloaders)
+# library(shiny)
+# library(shinyWidgets)
+# library(DT)
+# library(leaflet.extras)
+# library(DBI)
+# library(tidytext)
+# library(tm)
+# library(RSQLite)
+# library(httr)
+# library(jsonlite)
+# library(quanteda)
+# library(dplyr)
+# library(data.table)
+# library(quanteda.textstats)
+# library(quanteda.textmodels)
+# library(ggplot2)
+
 # Liste des mots qui nous intéressent
 word_data <- c("python","r","java","javascript","scala","cloud","spark","analyst","analyse",
                "scientist","science","azure","talend","qlik","ia","engineering","engineer",
@@ -36,7 +56,7 @@ word_data <- c("python","r","java","javascript","scala","cloud","spark","analyst
                "jira","confluence","kafka","spec","mongodb","oracle","hadoop","SAP","datastage","MicroStrategy",
                "informatica","kpi","kpis","scikit","learn","pandas","datalab","datalakes","batch",
                "pipelines","hdfs","hive","hbase","cloudera","mapr","awz","gcp","docker","cassandra",
-               "elasticsearch","datacenter","it",'agile',"srum","pilotage","si")
+               "elasticsearch","datacenter","it",'agile',"scrum","pilotage","si", "tensorflow", "keras")
 
 VB_style <- function(msg = 'Hello', style="font-size: 100%;"){
   tags$p( msg , style = style )
@@ -49,6 +69,9 @@ query_offres <- dbGetQuery(db, paste0("SELECT id_offre, intitule, date_parution,
 # Retraitement des adresses web des logos
 query_offres$logo<-paste0('<img src="',query_offres$logo, '"/>')
 
+# Retraitement des adresses web des offres
+query_offres$id_offre<-paste0('<a href=https://candidat.pole-emploi.fr/offres/recherche/detail/',query_offres$id_offre,'/>',query_offres$id_offre,'</a>')
+
 #renommer les colonnes de la table des offres
 query_offres <-rename(query_offres, c("N° Offre"="id_offre", "Intitulé de l'offre"="intitule", "Date de parution"="date_parution",
                                       "Partenaire"="logo","Type de contrat"="type_contrat","Expérience"="experience"))
@@ -56,29 +79,13 @@ dbDisconnect(db)
 
 affichage_data <- reactiveValues(data = query_offres)
 
-# library(leaflet)
-# library(shinydashboard)
-# library(shinycssloaders)
-# library(shiny)
-# library(DT)
-# library(leaflet.extras)
-# library(DBI)
-# library(tidytext)
-# library(tm)
-# library(RSQLite)
-# library(httr)
-# library(jsonlite)
-# library(quanteda)
-# library(dplyr)
-# library(data.table)
-
 # Partie front
 ui <- shinyUI(fluidPage(
     
     # Charger le style
     includeCSS("www/style.css"),
 
-    # Page complete
+    # Page complète
     dashboardPage(
         
         skin = "yellow",
@@ -113,8 +120,8 @@ ui <- shinyUI(fluidPage(
                 #Tableau récapitulatif des offres
                 tabItem(
                     tabName = "resume",
+                    
                     # Bouton rafraîchir
-
                     fluidRow(box(width = 12, title = "Résume des offres", 
                                  actionButton(inputId = "update", label = "Charger les données", icon(name = "sync", class = "fas fa-sync"), width = "20%" ))),
 
@@ -154,20 +161,14 @@ ui <- shinyUI(fluidPage(
                   )
                 ),
                 tabItem(tabName = "lsa",
-                        
                         fluidRow(box(title = "Analyse sémantique latente", width = 12)),
                         fluidRow(
-                          column(width = 6, plotOutput("plot_doc",height = "600px")),
-                          column(width=6,plotOutput("plot_txt",height = "600px")))
-                        
+                          column(width = 6, plotOutput("plot_doc",height = "900px")),
+                          column(width=6,plotOutput("plot_txt",height = "900px")))
                 )
-                    
             )
-            
         )
-        
     )
-    
 ))
 
 # Partie serveur
@@ -180,14 +181,14 @@ server <- shinyServer(function(input, output, session) {
       Sys.time()
     })
     
-    # Fonction nettoyage de données :
+    # Fonction nettoyage de données
     nettoyage <- function(document){
         #passe en miniature 
         document <- tolower(document)
         #retire les sauts de lignes
-        document <- gsub("[\n\r/+]","",document)
+        document <- gsub("[\n\r/+]"," ",document)
         #retire la ponctuation
-        #document <- gsub("[\\(,);:.?!'-*]"," ",document)
+        document <- gsub("[\\(,);:.?!'-*]"," ",document)
         #retire les chiffres
         document <- gsub("[0-9]","",document)
         #retire les accents
@@ -214,7 +215,7 @@ server <- shinyServer(function(input, output, session) {
                            client_secret = client_secret,
                            scope = paste("api_offresdemploiv2", "o2dsoffre", paste0("application_",client_id), sep = " "))
       
-      # POST pour recuperer le token
+      # POST pour récupérer le token
       result_auth <- POST("https://entreprise.pole-emploi.fr/connexion/oauth2/access_token",
                           query = list(realm = "/partenaire"),
                           body = request_body,
@@ -223,7 +224,6 @@ server <- shinyServer(function(input, output, session) {
       
       # Stockage du token
       api_char_token <- base::rawToChar(result_auth$content)
-      print(api_char_token)
       api_JSON_token <- jsonlite::fromJSON(api_char_token, flatten = TRUE)
       token = paste("Bearer ",api_JSON_token$access_token)
       
@@ -232,7 +232,7 @@ server <- shinyServer(function(input, output, session) {
       request_utf <- httr::content(request, as = 'text', encoding="UTF-8")
       api_JSON <- jsonlite::fromJSON(request_utf, flatten = TRUE)
       
-      #création dataframe analyse des offres
+      # Création dataframe analyse des offres
       id_offre <- api_JSON$resultats$id
       description <- api_JSON$resultats$description
       intitule <- api_JSON$resultats$intitule
@@ -244,15 +244,15 @@ server <- shinyServer(function(input, output, session) {
       statut <- api_JSON$resultats$qualificationLibelle
       experience <- api_JSON$resultats$experienceLibelle
       
-      #recodage date
+      # Recodage date
       date <- strsplit(date_parution,"T",fixed = T)
       date_parution <- unlist(lapply(date, function(x){return(x[1])}))
       
-      #creation des listes
+      # Création des listes
       offre_partenaire <- list()
       logo <- list()
       
-      #extraction des informations
+      # Extraction des informations
       for(i in 1:length(partenaire_API)){
         nom <- partenaire_API[[i]]$nom
         logos <- partenaire_API[[i]]$logo
@@ -264,14 +264,14 @@ server <- shinyServer(function(input, output, session) {
         logo <- c(logo,logos)
       }
       
-      #mise au format chaine de caract?re
+      # Mise au format chaine de caractère
       partenaire <- unlist(offre_partenaire)
       logo <- unlist(logo)
       
-      # dataframe des offres recuperees
+      # dataframe des offres récupérées
       offre <- data.frame(cbind(id_offre,intitule,description,date_parution,latitude,longitude,type_contrat,statut,experience,partenaire,logo))
       
-      #enlever les offres dupliquÃ©es en se basant sur l'ID
+      # Enlever les offres dupliquées en se basant sur l'ID
       offre <- offre[!duplicated(offre$id_offre), ]
       
       #================================================#
@@ -279,16 +279,16 @@ server <- shinyServer(function(input, output, session) {
       #           dans la base de donnees
       #================================================#
       
-      # connexion 
+      # Connexion 
       db <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
       data <- dbGetQuery(db,paste0("SELECT * FROM offre;"))
       
-      # comparaison des nouvelles offres avec celles dans la base
+      # Comparaison des nouvelles offres avec celles dans la base
       New_offers <- setDT(offre)[!data, on="id_offre"]
       
-      # insertion 
+      # Insertion 
       if(nrow(data)>500){
-        # supprimer les 150 premières lignes
+        # Supprimer les 150 premières lignes
         dbExecute(db,paste0("DELETE FROM offre WHERE id_offre IN (SELECT id_offre FROM offre ORDER BY id_offre LIMIT 150);"))
       }
 
@@ -299,10 +299,13 @@ server <- shinyServer(function(input, output, session) {
       # Retraitement des adresses web des logos
       query_offres_maj$logo <- paste0('<img src="',query_offres_maj$logo, '"/>')
       
+      # Retraitement des adresses web des offres
+      query_offres_maj$id_offre<-paste0('<a href=https://candidat.pole-emploi.fr/offres/recherche/detail/',query_offres_maj$id_offre,'/>',query_offres_maj$id_offre,'</a>')
+      
       #renommer les colonnes de la table des offres 
       query_offres_maj <-rename(query_offres_maj, c("N° Offre"="id_offre", "Intitulé de l'offre"="intitule", "Date de parution"="date_parution",
                                             "Partenaire"="logo","Type de contrat"="type_contrat","Expérience"="experience"))
-      #close
+      # Déconnexion de la bdd
       dbDisconnect(db)
       
       # Mis à jour des données
@@ -317,7 +320,7 @@ server <- shinyServer(function(input, output, session) {
     #        Partie résumé des offres  #
     ######################################
     
-    # Affichage de tous les elements
+    # Affichage de tous les éléments
     
     output$resumeOffres <- DT::renderDT({DT::datatable(affichage_data$data,escape = FALSE)}, options = list(lengthMenu = c(5, 10, 20), pageLength = 20, scrollX = TRUE))
     
@@ -348,9 +351,8 @@ server <- shinyServer(function(input, output, session) {
       dfm()
     
     # Liste des maîtrises à matcher avec la matrice documents-termes.
-    maitrise <- c("python","r","sql","nosql","knime","tableau","powerbi","sas","azure","aws","statistique","mongodb","hadoop","spark","matlab","scala","java","git","github","gitlab","qliksense","cloud","excel","gcp","hive","qlikview","qlik","talend")
+    maitrise <- c("python","r","sql","nosql","knime","tableau","powerbi","sas","azure","aws","statistique","mongodb","hadoop","spark","matlab","scala","java","git","github","gitlab","qliksense","cloud","excel","gcp","hive","qlikview","qlik","talend","tensorflow","keras", "dax", "etl", "reporting", "management")
     
-    # map.dmt <- quanteda::dfm_match(dfm(corpus.token),maîtrise)
     dfMap <- convert(corpus.token,to="data.frame")
     
     dfMap$doc_id <- NULL
@@ -393,28 +395,28 @@ server <- shinyServer(function(input, output, session) {
     ######################################
     
     # connexion base de données
-    
     conn <- dbConnect(RSQLite::SQLite(), "corpusOffreData.sqlite")
     
     df <- dbGetQuery(conn,"SELECT * FROM offre")
     
     dbDisconnect(conn)
+    
     #nettoyage de la description
     df$description <- nettoyage(df$description)
     
-    #creation du corpus 
+    #création du corpus 
     corpus <- quanteda::corpus(df,text_field='description')
     
     #création liste des mots intéressants
     
-    #tokenize : vérifie que tout les nombres et caratÃ¨re spÃ©ciaux on bien Ã©tÃ© supprimÃ©
+    #tokenize : vérifie que tous les nombres et caratère spéciaux ont bien été supprimés
     tokens <- tokens(corpus,remove_numbers = TRUE,remove_symbols = TRUE)
     
-    #selection des mots dans corpus 
+    #sélection des mots dans corpus 
     tokens_spw <- tokens %>%
       tokens_select(pattern = word_data,selection = "keep")
     
-    #crÃ©ation de la matrice doc-termes
+    #création de la matrice doc-termes
     dmt <- dfm(tokens_spw)
     
     #============================#
@@ -442,8 +444,8 @@ server <- shinyServer(function(input, output, session) {
     
     #deuxième graphique en fonction des autres axes 
     output$plot2 <- renderPlot({
-      #df freq en fonction var 
       
+      #df freq en fonction var 
       if(input$select == "Type contrat"){
         freq_terms_var <- textstat_frequency(dmt,groups = type_contrat)
       } else if (input$select == "Expériences") {
@@ -452,7 +454,7 @@ server <- shinyServer(function(input, output, session) {
         freq_terms_var <- textstat_frequency(dmt,groups = statut)
       }
       
-      #liste des termes saisis par l'utilisateur 
+      #liste des termes saisis par l'utilisateur
       var <- input$multinput
       #bloque pour afficher uniquement 5 variables
       if(length(var)> 5){
@@ -460,7 +462,7 @@ server <- shinyServer(function(input, output, session) {
       }
       selecvar <- freq_terms_var[freq_terms_var$feature %in% var,]
       
-      # Utiliser position = position_dodge()
+      #graphique sur la fréquence des mots du corpus
       ggplot(data=selecvar, aes(x=feature, y=docfreq, fill=group)) +
         geom_bar(stat="identity", position=position_dodge())+
         ggtitle("Fréquence des mots du corpus par axe") +
@@ -491,12 +493,12 @@ server <- shinyServer(function(input, output, session) {
       )
     })
     
-    # métier le plus représenté 
+    # métier le plus représenté
     metier <- c("analyst","scientist","engin","manager","consult")
     
     df$intitule <- nettoyage(df$intitule)
     
-    #creation du corpus 
+    #création du corpus
     corpus_int <- quanteda::corpus(df,text_field='intitule')
     
     #création liste des mots intéressants
@@ -529,7 +531,6 @@ server <- shinyServer(function(input, output, session) {
     })
     
     # nombre d'offre avec % d'offre pour les débutants
-    
     freq_terms_var_expe <- textstat_frequency(dmt,groups = experience)
     
     deb <- freq_terms_var_expe[grep("Début.",freq_terms_var_expe$group),]
@@ -561,7 +562,6 @@ server <- shinyServer(function(input, output, session) {
         xlab("Axe 1") + ylab("Axe 2")
     })
     
-    
     var <- data.frame(mylsa$features[,1:2])
     
     output$plot_txt <- renderPlot({
@@ -570,11 +570,6 @@ server <- shinyServer(function(input, output, session) {
         ggtitle("Projection des termes sur les deux premiers axes")+
         xlab("Axe 1") + ylab("Axe 2")
     })
-    
-    
-    
-    
-    
     
 })
 
