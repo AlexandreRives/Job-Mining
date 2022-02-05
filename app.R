@@ -165,6 +165,7 @@ ui <- shinyUI(fluidPage(
                         fluidRow(
                           column(width = 6, plotOutput("plot_doc",height = "900px")),
                           column(width=6,plotOutput("plot_txt",height = "900px")))
+                        
                 )
             )
         )
